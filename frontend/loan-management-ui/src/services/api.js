@@ -1,4 +1,5 @@
 import axios from "axios";
+import { clearToken, getToken, UNAUTHORIZED_EVENT } from "./session";
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api",
@@ -8,16 +9,10 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  if (typeof window !== "undefined") {
-    const token =
-      window.localStorage.getItem("token") ||
-      window.localStorage.getItem("auth_token");
-
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+  const token = getToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
-
   return config;
 });
 
@@ -25,11 +20,9 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 && typeof window !== "undefined") {
-      window.localStorage.removeItem("token");
-      window.localStorage.removeItem("auth_token");
-      window.dispatchEvent(new Event("auth:unauthorized"));
+      clearToken();
+      window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
     }
-
     return Promise.reject(error);
   },
 );

@@ -1,9 +1,9 @@
-import AuthForm from "../../components/AuthForm";
+import LoginForm from "@/components/auth/LoginForm";
 
 export const metadata = {
   title: "Sign in | LoanFlow",
 };
 
 export default function LoginPage() {
-  return <AuthForm mode="login" />;
+  return <LoginForm />;
 }

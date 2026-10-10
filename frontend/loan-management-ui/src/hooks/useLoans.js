@@ -1,63 +1,39 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "../context/AuthContext";
-import api from "../services/api";
+import { useAuth } from "@/context/AuthContext";
+import { loanService } from "@/services/loan.service";
 
-export const loansQueryKey = (userId) => ["loans", userId];
-
-async function fetchLoans() {
-  const response = await api.get("/loan");
-  const loans = response.data?.data;
-
-  if (!Array.isArray(loans)) {
-    throw new Error("The server returned an invalid loans response.");
-  }
-
-  return loans;
-}
+const LOANS_QUERY_KEY = ["loans"];
 
 export function useLoans() {
   const { user, isAuthenticated, isLoading } = useAuth();
   return useQuery({
-    queryKey: loansQueryKey(user?.id ?? "authenticated-user"),
-    queryFn: fetchLoans,
+    // Keyed by user so one account never sees another account's cached list.
+    queryKey: [...LOANS_QUERY_KEY, user?.id],
+    queryFn: loanService.getAll,
     enabled: isAuthenticated && !isLoading,
   });
 }
 
-export function useCreateLoan() {
-  const { user } = useAuth();
+// Every mutation refreshes the list afterwards - even when it fails, because a
+// failure usually means our copy was stale (e.g. an admin just decided the loan).
+function useLoanMutation(mutationFn) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (loan) => api.post("/loan", loan),
-    onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: loansQueryKey(user?.id ?? "authenticated-user"),
-      }),
+    mutationFn,
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: LOANS_QUERY_KEY }),
   });
 }
 
-export function useUpdateLoan() {
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, ...loan }) => api.put(`/loan/${id}`, loan),
-    onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: loansQueryKey(user?.id ?? "authenticated-user"),
-      }),
-  });
-}
+export const useCreateLoan = () => useLoanMutation(loanService.create);
 
-export function useDeleteLoan() {
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id) => api.delete(`/loan/${id}`),
-    onSuccess: () =>
-      queryClient.invalidateQueries({
-        queryKey: loansQueryKey(user?.id ?? "authenticated-user"),
-      }),
-  });
-}
+export const useUpdateLoan = () =>
+  useLoanMutation(({ id, ...payload }) => loanService.update(id, payload));
+
+export const useDeleteLoan = () => useLoanMutation(loanService.remove);
+
+// Admin only: approve / reject.
+export const useUpdateLoanStatus = () =>
+  useLoanMutation(({ id, status }) => loanService.updateStatus(id, status));

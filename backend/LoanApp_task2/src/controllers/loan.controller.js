@@ -1,81 +1,73 @@
 const loanService = require('../services/loan.service');
-const HTTP_STATUS = require('../enums/httpStatus');
+const HTTP_STATUS = require('../enums/http-status.enum');
+const asyncHandler = require('../middleware/async-handler.middleware');
 
-const getAllLoans = async (req, res, next) => {
-    try {
-        const loans = await loanService.getAllLoans(req.user.id);
+const getAllLoans = asyncHandler(async (req, res) => {
+    const loans = await loanService.getAllLoans(req.user);
 
-        return res.status(HTTP_STATUS.OK).json({
-            success: true,
-            data: loans
-        });
-    } catch (error) {
-        next(error);
-    }
-};
+    return res.status(HTTP_STATUS.OK).json({
+        success: true,
+        data: loans
+    });
+});
 
-const createLoan = async (req, res, next) => {
-    try {
-        const loan = await loanService.createLoan(req.body, req.user.id);
+const createLoan = asyncHandler(async (req, res) => {
+    const loan = await loanService.createLoan(req.body, req.user.id);
 
-        return res.status(HTTP_STATUS.CREATED).json({
-            success: true,
-            message: 'Loan application created successfully',
-            data: loan
-        });
-    } catch (error) {
-        next(error);
-    }
-};
+    return res.status(HTTP_STATUS.CREATED).json({
+        success: true,
+        message: 'Loan application created successfully',
+        data: loan
+    });
+});
 
-const getLoanById = async (req, res, next) => {
-    try {
-        const loan = await loanService.getLoanById(
-            req.params.id,
-            req.user.id
-        );
+const getLoanById = asyncHandler(async (req, res) => {
+    const loan = await loanService.getLoanById(req.params.id, req.user);
 
-        return res.status(HTTP_STATUS.OK).json({
-            success: true,
-            data: loan
-        });
-    } catch (error) {
-        next(error);
-    }
-};
+    return res.status(HTTP_STATUS.OK).json({
+        success: true,
+        data: loan
+    });
+});
 
-const updateLoan = async (req, res, next) => {
-    try {
-        const loan = await loanService.updateLoan(
-            req.params.id,
-            req.body,
-            req.user.id
-        );
+const updateLoan = asyncHandler(async (req, res) => {
+    const loan = await loanService.updateLoan(
+        req.params.id,
+        req.body,
+        req.user.id
+    );
 
-        return res.status(HTTP_STATUS.OK).json({
-            success: true,
-            message: 'Loan application updated successfully',
-            data: loan
-        });
-    } catch (error) {
-        next(error);
-    }
-};
+    return res.status(HTTP_STATUS.OK).json({
+        success: true,
+        message: 'Loan application updated successfully',
+        data: loan
+    });
+});
 
-const deleteLoan = async (req, res, next) => {
-    try {
-        await loanService.deleteLoan(req.params.id, req.user.id);
+const deleteLoan = asyncHandler(async (req, res) => {
+    await loanService.deleteLoan(req.params.id, req.user.id);
 
-        return res.status(HTTP_STATUS.NO_CONTENT).send();
-    } catch (error) {
-        next(error);
-    }
-};
+    return res.status(HTTP_STATUS.NO_CONTENT).send();
+});
+
+const updateLoanStatus = asyncHandler(async (req, res) => {
+    const loan = await loanService.updateLoanStatus(
+        req.params.id,
+        req.body.status
+    );
+
+    return res.status(HTTP_STATUS.OK).json({
+        success: true,
+        message: 'Loan status updated successfully',
+        data: loan
+    });
+});
 
 module.exports = {
     getAllLoans,
     createLoan,
     getLoanById,
     updateLoan,
-    deleteLoan
+    deleteLoan,
+    updateLoanStatus
 };

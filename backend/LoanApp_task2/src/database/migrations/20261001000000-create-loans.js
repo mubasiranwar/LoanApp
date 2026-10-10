@@ -1,5 +1,7 @@
 'use strict';
 
+const { LOAN_STATUS, LOAN_STATUS_VALUES } = require('../../enums/loan-status.enum');
+
 module.exports = {
     async up(queryInterface, Sequelize) {
         await queryInterface.createTable('loans', {
@@ -31,13 +33,9 @@ module.exports = {
             },
 
             status: {
-                type: Sequelize.ENUM(
-                    'PENDING',
-                    'APPROVED',
-                    'REJECTED'
-                ),
+                type: Sequelize.ENUM(...LOAN_STATUS_VALUES),
                 allowNull: false,
-                defaultValue: 'PENDING'
+                defaultValue: LOAN_STATUS.PENDING
             },
 
             created_at: {

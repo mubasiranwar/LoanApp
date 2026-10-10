@@ -4,13 +4,22 @@
   --background: #f8fafc;
   --foreground: #0f172a;
   --primary: #0f3d5e;
-  --primary-hover: #0b314b;
+  --primary-dark: #0b314b;
+  --primary-hover: var(--primary-dark);
   --card: #ffffff;
   --border: #e2e8f0;
   --muted: #64748b;
   --success: #15803d;
   --warning: #b45309;
   --danger: #be123c;
+}
+
+/* Exposes the tokens above as Tailwind colours:
+   bg-primary, text-primary, border-primary, hover:bg-primary-hover, ring-primary/30 ... */
+@theme inline {
+  --color-primary: var(--primary);
+  --color-primary-dark: var(--primary-dark);
+  --color-primary-hover: var(--primary-hover);
 }
 
 * {

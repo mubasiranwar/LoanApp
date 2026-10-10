@@ -5,6 +5,6 @@ const loanRoutes = require('./loan.route');
 const router = express.Router();
 
 router.use('/auth', authRoutes);
-router.use('/loan', loanRoutes);
+router.use('/loans', loanRoutes);
 
 module.exports = router;

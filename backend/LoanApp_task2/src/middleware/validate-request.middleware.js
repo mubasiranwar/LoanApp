@@ -1,4 +1,4 @@
-const BadRequestError = require('../errors/BadRequestError');
+const BadRequestError = require('../errors/bad-request.error');
 
 const validateRequest = (schema, source = 'body') => {
     return (req, res, next) => {
@@ -15,7 +15,8 @@ const validateRequest = (schema, source = 'body') => {
 
             case 'body':
             default:
-                dataToValidate = req.body;
+                // Express 5 leaves req.body undefined when no body is sent.
+                dataToValidate = req.body ?? {};
                 break;
         }
 

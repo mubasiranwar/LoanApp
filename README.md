@@ -48,7 +48,7 @@ The frontend and backend run as two separate Node.js applications:
 | PostgreSQL | `localhost:5432` | configured on your machine |
 
 The backend serves its REST API below `/api`. For example, the loan collection
-endpoint is `http://localhost:5000/api/loan`.
+endpoint is `http://localhost:5000/api/loans`.
 
 ## Repository layout
 
@@ -63,10 +63,10 @@ LoanApp/
 │       └── src/
 │           ├── config/               # Runtime and Sequelize CLI configuration
 │           ├── controllers/          # HTTP handlers
-│           ├── database/             # Sequelize instance, migrations, seed data
+│           ├── database/             # Sequelize instance, models, migrations, seed data
+│           ├── enums/                # LOAN_STATUS, USER_ROLE, HTTP_STATUS
 │           ├── errors/               # Application error classes
 │           ├── middleware/           # Request validation and error responses
-│           ├── models/               # Sequelize models
 │           ├── routes/               # API route definitions
 │           ├── schemas/              # Joi validation schemas
 │           └── services/             # Loan business logic and database calls
@@ -260,9 +260,9 @@ backend `.env` to match that new browser origin, then restart the backend.
    If no valid session exists, the dashboard redirects to `/login`.
 4. `src/app/page.js` calls `useLoans()` and renders the navbar, summary cards,
    and loan table.
-5. `useLoans()` calls `GET /loan` through the shared Axios client in
+5. `useLoans()` calls `GET /loans` through the shared Axios client in
    `src/services/api.js`. The client attaches the bearer token, and the
-   configured API URL resolves this to `GET http://localhost:5000/api/loan`.
+   configured API URL resolves this to `GET http://localhost:5000/api/loans`.
 6. Express authenticates the token, attaches its user ID to the request, and
    the controller passes that ID to the loan service. Sequelize returns only
    rows owned by that user.
@@ -278,7 +278,7 @@ request as an empty database.
 1. The dashboard opens `LoanModal`.
 2. The modal validates required text, positive amount, and positive whole-number
    tenure before submitting.
-3. `useCreateLoan()` sends `POST /api/loan`.
+3. `useCreateLoan()` sends `POST /api/loans`.
 4. Express validates the request body with the create Joi schema.
 5. The controller delegates to the service, which creates a Sequelize model
    record.
@@ -289,14 +289,14 @@ request as an empty database.
 
 1. The table's Edit action opens `LoanModal` with the selected application.
 2. The modal submits the changed fields to `useUpdateLoan()`.
-3. The hook sends `PUT /api/loan/:id`.
+3. The hook sends `PUT /api/loans/:id`.
 4. The backend validates the body and updates the matching database record.
 5. Successful updates invalidate `["loans"]`, refreshing the rendered data.
 
 ### Deleting an application
 
 1. The table's Delete action opens `DeleteModal` for the selected record.
-2. Confirming calls `useDeleteLoan()`, which sends `DELETE /api/loan/:id`.
+2. Confirming calls `useDeleteLoan()`, which sends `DELETE /api/loans/:id`.
 3. The backend deletes the record and returns HTTP `204 No Content`.
 4. Successful deletion invalidates `["loans"]`, removing the record from the
    table and recalculating summary counts.
@@ -317,17 +317,17 @@ avoid showing one account's data after switching accounts.
 
 ## Loan API
 
-Loan endpoints are under `/api/loan` and require an
+Loan endpoints are under `/api/loans` and require an
 `Authorization: Bearer <token>` header. All operations are scoped to the
 authenticated owner.
 
 | Method | Path | Purpose | Success |
 | --- | --- | --- | --- |
-| `GET` | `/api/loan` | List loans, newest first | `200 OK`, `{ success, data }` |
-| `POST` | `/api/loan` | Create a loan | `201 Created`, `{ success, message, data }` |
-| `GET` | `/api/loan/:id` | Get one loan by UUID | `200 OK`, `{ success, data }` |
-| `PUT` | `/api/loan/:id` | Update one loan | `200 OK`, `{ success, message, data }` |
-| `DELETE` | `/api/loan/:id` | Delete one loan | `204 No Content` |
+| `GET` | `/api/loans` | List loans, newest first | `200 OK`, `{ success, data }` |
+| `POST` | `/api/loans` | Create a loan | `201 Created`, `{ success, message, data }` |
+| `GET` | `/api/loans/:id` | Get one loan by UUID | `200 OK`, `{ success, data }` |
+| `PUT` | `/api/loans/:id` | Update one loan | `200 OK`, `{ success, message, data }` |
+| `DELETE` | `/api/loans/:id` | Delete one loan | `204 No Content` |
 
 Create request example:
 
@@ -407,7 +407,7 @@ are not server-side sessions and cannot be individually revoked before expiry.
 For higher-security deployments, consider an HTTP-only secure cookie, token
 rotation/revocation, rate limiting, TLS, and account recovery controls.
 
-All `/api/loan` endpoints require a valid bearer token. Loan list, read, update,
+All `/api/loans` endpoints require a valid bearer token. Loan list, read, update,
 and delete operations are scoped to the authenticated user's ID. A user cannot
 read or change another user's loan by guessing its UUID; the API responds as
 though that loan does not exist. An `ADMIN` role value exists in the database
@@ -467,12 +467,57 @@ The `loans` table has these fields:
 
 The model and migration are maintained separately:
 
-- Sequelize model: `backend/LoanApp_task2/src/models/loan.model.js`
+- Sequelize model: `backend/LoanApp_task2/src/database/models/loan.model.js`
 - Database migration: `backend/LoanApp_task2/src/database/migrations/`
 - Sample data: `backend/LoanApp_task2/src/database/seeders/`
 
 Keep the model, validation schema, and migration aligned when changing the
 database fields.
+
+## Roles, loan status and admin setup
+
+There are two roles (`src/enums/user-role.enum.js`):
+
+| Role | Can do |
+| --- | --- |
+| `USER` | Create loan applications; see, edit and delete **their own** applications **while they are `PENDING`**. |
+| `ADMIN` | See **every** application and approve or reject pending ones. Admins do not create applications. |
+
+Rules enforced by the backend (the frontend only mirrors them):
+
+- A new loan is always `PENDING`. `status` is rejected (`400`) in create/update bodies.
+- Only `PATCH /api/loans/:id/status` (admin only) changes the status, and only to `APPROVED` or `REJECTED`.
+- A decision is final: deciding an already decided loan returns `409`.
+- `APPROVED` / `REJECTED` loans cannot be edited or deleted by the applicant (`403`).
+
+| Method | Path | Who | Notes |
+| --- | --- | --- | --- |
+| `GET` | `/api/loans` | any logged-in user | admin: all loans (with `user`), user: own loans |
+| `POST` | `/api/loans` | `USER` | always created as `PENDING` |
+| `GET` | `/api/loans/:id` | owner or admin | `:id` must be a UUID, otherwise `400` |
+| `PUT` | `/api/loans/:id` | owner | only while `PENDING` |
+| `DELETE` | `/api/loans/:id` | owner | only while `PENDING` |
+| `PATCH` | `/api/loans/:id/status` | `ADMIN` | body `{ "status": "APPROVED" \| "REJECTED" }` |
+
+### Creating the first admin
+
+Put the admin details in `backend/LoanApp_task2/.env` (never commit them):
+
+```text
+ADMIN_USERNAME=Admin
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=choose-a-strong-password
+```
+
+then run once: `npm run db:seed:admin`.
+
+### Allowing several frontend URLs (CORS)
+
+`FRONTEND_URL` accepts a comma-separated list:
+
+```text
+FRONTEND_URL=http://localhost:3000,http://localhost:3002
+```
 
 ## Troubleshooting
 
@@ -480,7 +525,7 @@ database fields.
 
 - Confirm the backend is running and prints `http://localhost:5000`.
 - Open `http://localhost:5000/` to check the API process is responding.
-- Open `http://localhost:5000/api/loan` to check the loan endpoint and database.
+- Open `http://localhost:5000/api/loans` to check the loan endpoint and database.
 - Check that `.env.local` in the frontend contains
   `NEXT_PUBLIC_API_URL=http://localhost:5000/api`.
 - Restart Next.js after changing `.env.local`.

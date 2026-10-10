@@ -1,6 +1,7 @@
 'use strict';
 
 const { randomUUID } = require('crypto');
+const { LOAN_STATUS } = require('../../enums/loan-status.enum');
 
 module.exports = {
     async up(queryInterface) {
@@ -11,7 +12,7 @@ module.exports = {
                 amount: 750000.00,
                 tenure_months: 36,
                 purpose: 'Small business expansion',
-                status: 'APPROVED',
+                status: LOAN_STATUS.APPROVED,
                 created_at: new Date('2026-01-15'),
                 updated_at: new Date('2026-01-15')
             },
@@ -22,7 +23,7 @@ module.exports = {
                 amount: 350000.00,
                 tenure_months: 24,
                 purpose: 'Education expenses',
-                status: 'PENDING',
+                status: LOAN_STATUS.PENDING,
                 created_at: new Date('2026-02-20'),
                 updated_at: new Date('2026-02-20')
             }

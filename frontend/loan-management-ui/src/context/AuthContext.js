@@ -1,98 +1,74 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import api from "../services/api";
+import { authService } from "@/services/auth.service";
+import {
+  clearToken,
+  getToken,
+  saveToken,
+  UNAUTHORIZED_EVENT,
+} from "@/services/session";
+import { USER_ROLE } from "@/constants/userRole";
 
 const AuthContext = createContext(null);
 
+// The one place that asks the API "who is logged in?" (used once, on page load).
+async function fetchSessionUser() {
+  if (!getToken()) return null;
+  try {
+    return await authService.getCurrentUser();
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }) {
   const queryClient = useQueryClient();
-  const [token, setToken] = useState(null);
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    let active = true;
-
-    const handleUnauthorized = () => {
-      window.localStorage.removeItem("token");
-      window.localStorage.removeItem("auth_token");
-      setToken(null);
-      setUser(null);
-      queryClient.clear();
-    };
-
-    window.addEventListener("auth:unauthorized", handleUnauthorized);
-    const storedToken =
-      window.localStorage.getItem("token") ||
-      window.localStorage.getItem("auth_token");
-
-    if (!storedToken) {
-      queueMicrotask(() => {
-        if (active) setIsLoading(false);
-      });
-    } else {
-      queueMicrotask(() => {
-        if (active) setToken(storedToken);
-      });
-      api
-        .get("/auth/me")
-        .then((response) => {
-          if (active) setUser(response.data.data);
-        })
-        .catch(() => {
-          if (active) setUser(null);
-        })
-        .finally(() => {
-          if (active) setIsLoading(false);
-        });
-    }
-
-    return () => {
-      active = false;
-      window.removeEventListener("auth:unauthorized", handleUnauthorized);
-    };
-  }, [queryClient]);
-
-  useEffect(() => {
-    if (isLoading) return;
-
-    if (token) {
-      window.localStorage.setItem("token", token);
-      window.localStorage.removeItem("auth_token");
-    } else {
-      window.localStorage.removeItem("token");
-      window.localStorage.removeItem("auth_token");
-    }
-  }, [isLoading, token]);
-
-  const login = useCallback((nextToken, userData = null) => {
-    window.localStorage.setItem("token", nextToken);
-    window.localStorage.removeItem("auth_token");
-    setToken(nextToken);
-    setUser(userData);
-  }, []);
-
-  const logout = useCallback(() => {
-    window.localStorage.removeItem("token");
-    window.localStorage.removeItem("auth_token");
-    setToken(null);
+  // The one place that ends a session: used by the Log out button AND by the
+  // 401 handler below. (React Compiler is on, so no useCallback/useMemo needed.)
+  function logout() {
+    clearToken();
     setUser(null);
     queryClient.clear();
-  }, [queryClient]);
+  }
 
-  const value = useMemo(
-    () => ({
-      user,
-      token,
-      isAuthenticated: Boolean(token),
-      isLoading,
-      login,
-      logout,
-    }),
-    [user, token, isLoading, login, logout],
-  );
+  // The one place that starts a session: after a successful login/signup.
+  function login(token, nextUser) {
+    saveToken(token);
+    setUser(nextUser);
+  }
+
+  // Restore the session when the app loads.
+  useEffect(() => {
+    let active = true;
+    fetchSessionUser().then((sessionUser) => {
+      if (!active) return;
+      setUser(sessionUser);
+      setIsLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // The API said 401 (expired/invalid token) -> same logout as the button.
+  useEffect(() => {
+    window.addEventListener(UNAUTHORIZED_EVENT, logout);
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, logout);
+  });
+
+  const value = {
+    user,
+    isAuthenticated: Boolean(user),
+    isAdmin: user?.role === USER_ROLE.ADMIN,
+    isLoading,
+    login,
+    logout,
+  };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

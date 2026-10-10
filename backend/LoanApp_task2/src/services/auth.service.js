@@ -2,10 +2,11 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { UniqueConstraintError } = require('sequelize');
 const config = require('../config');
-const BadRequestError = require('../errors/BadRequestError');
-const ConflictError = require('../errors/ConflictError');
-const UnauthorizedError = require('../errors/UnauthorizedError');
-const User = require('../models/user.model');
+const BadRequestError = require('../errors/bad-request.error');
+const ConflictError = require('../errors/conflict.error');
+const UnauthorizedError = require('../errors/unauthorized.error');
+const { User } = require('../database/models');
+const { USER_ROLE } = require('../enums/user-role.enum');
 
 const BCRYPT_ROUNDS = 12;
 const TOKEN_LIFETIME = '8h';
@@ -66,7 +67,7 @@ class AuthService {
                 username: username.trim(),
                 email: normalizedEmail,
                 password_hash,
-                role: 'USER'
+                role: USER_ROLE.USER
             });
 
             return createAuthResponse(user);

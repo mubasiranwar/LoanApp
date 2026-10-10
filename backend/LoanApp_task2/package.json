@@ -4,7 +4,13 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node app.js"
+    "start": "node app.js",
+    "dev": "node --watch app.js",
+    "db:migrate": "sequelize-cli db:migrate",
+    "db:migrate:undo": "sequelize-cli db:migrate:undo",
+    "db:seed:admin": "sequelize-cli db:seed --seed 20261001001000-create-admin-user.js",
+    "db:test": "node test-db.js",
+    "test:smoke": "node scripts/smoke-test.js"
   },
   "keywords": [],
   "author": "",
