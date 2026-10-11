@@ -1,9 +1,14 @@
-import LoginForm from "@/components/auth/LoginForm";
+import LoanDashboard from "@/components/loans/LoanDashboard";
+import RequireAuth from "@/components/auth/RequireAuth";
 
 export const metadata = {
-  title: "Sign in | LoanFlow",
+  title: "Loan applications | LoanFlow",
 };
 
-export default function LoginPage() {
-  return <LoginForm />;
+export default function HomePage() {
+  return (
+    <RequireAuth>
+      <LoanDashboard />
+    </RequireAuth>
+  );
 }
