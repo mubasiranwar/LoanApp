@@ -1,4 +1,5 @@
 const express = require('express');
+const { rateLimit } = require('express-rate-limit');
 const {
     getProfile,
     login,
@@ -13,8 +14,19 @@ const {
 
 const router = express.Router();
 
-router.post('/signup', validateRequest(signupSchema), signup);
-router.post('/login', validateRequest(loginSchema), login);
+const authRateLimit = () => rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 10,
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: {
+        success: false,
+        message: 'Too many authentication attempts. Please try again later.'
+    }
+});
+
+router.post('/signup', authRateLimit(), validateRequest(signupSchema), signup);
+router.post('/login', authRateLimit(), validateRequest(loginSchema), login);
 router.get('/me', authenticateToken, getProfile);
 
 module.exports = router;

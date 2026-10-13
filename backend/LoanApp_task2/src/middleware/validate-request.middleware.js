@@ -29,7 +29,7 @@ const validateRequest = (schema, source = 'body') => {
         }
 
         if (source === 'query') {
-            req.query = value;
+            req.validatedQuery = value;
         } else if (source === 'params') {
             req.params = value;
         } else {

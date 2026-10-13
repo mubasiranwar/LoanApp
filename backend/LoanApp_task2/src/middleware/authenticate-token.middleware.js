@@ -10,10 +10,6 @@ function authenticateToken(req, res, next) {
         return next(new UnauthorizedError('A valid Bearer token is required'));
     }
 
-    if (!config.jwtSecret) {
-        return next(new Error('JWT_SECRET is not configured'));
-    }
-
     try {
         const claims = jwt.verify(match[1], config.jwtSecret, {
             algorithms: ['HS256']

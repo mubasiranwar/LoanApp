@@ -21,10 +21,6 @@ function publicUser(user) {
 }
 
 function createToken(user) {
-    if (!config.jwtSecret) {
-        throw new Error('JWT_SECRET is not configured');
-    }
-
     return jwt.sign(
         {
             role: user.role

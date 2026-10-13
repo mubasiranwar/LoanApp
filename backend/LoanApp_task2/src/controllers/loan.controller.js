@@ -3,11 +3,17 @@ const HTTP_STATUS = require('../enums/http-status.enum');
 const asyncHandler = require('../middleware/async-handler.middleware');
 
 const getAllLoans = asyncHandler(async (req, res) => {
-    const loans = await loanService.getAllLoans(req.user);
+    const result = await loanService.getAllLoans(req.user, req.validatedQuery);
 
     return res.status(HTTP_STATUS.OK).json({
         success: true,
-        data: loans
+        data: result.rows,
+        pagination: {
+            page: result.page,
+            limit: result.limit,
+            total: result.count,
+            totalPages: Math.ceil(result.count / result.limit)
+        }
     });
 });
 

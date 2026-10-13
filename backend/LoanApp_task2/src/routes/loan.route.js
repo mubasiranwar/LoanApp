@@ -18,6 +18,7 @@ const {
     createLoanSchema,
     updateLoanSchema,
     updateLoanStatusSchema,
+    loanListQuerySchema,
     loanIdParamSchema
 } = require('../schemas/loan.schema');
 
@@ -28,7 +29,7 @@ router.use(authenticateToken);
 
 const validateLoanId = validateRequest(loanIdParamSchema, 'params');
 
-router.get('/', getAllLoans);
+router.get('/', validateRequest(loanListQuerySchema, 'query'), getAllLoans);
 
 // Applicants create loans. Admins review them, so they cannot create one
 // (otherwise an admin could approve their own application).

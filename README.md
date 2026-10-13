@@ -58,8 +58,10 @@ LoanApp/
 ├── backend/
 │   └── LoanApp_task2/
 │       ├── app.js                    # Express app and middleware registration
+│       ├── server.js                 # DB authentication and HTTP startup
 │       ├── .env.example              # Backend configuration template
 │       ├── .sequelizerc              # Sequelize CLI paths
+│       ├── scripts/                  # Smoke test and DB connection check
 │       └── src/
 │           ├── config/               # Runtime and Sequelize CLI configuration
 │           ├── controllers/          # HTTP handlers
@@ -142,6 +144,10 @@ DB_USER=postgres
 DB_PASSWORD=your_local_postgres_password
 DB_DIALECT=postgres
 JWT_SECRET=replace_with_a_long_random_secret
+
+ADMIN_USERNAME=Admin
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=choose-a-strong-password
 ```
 
 Replace the example password with your own local database password. Do not
@@ -153,8 +159,13 @@ instances that need to verify each other's tokens.
 
 The application reads `PORT` and `FRONTEND_URL` in `src/config/index.js`.
 `FRONTEND_URL` is the browser origin allowed by the backend's CORS middleware.
+It accepts comma-separated browser origins, each including its scheme and port
+and without a trailing slash. The API allows `GET`, `POST`, `PUT`, `PATCH`,
+`DELETE`, and preflight `OPTIONS` requests from those origins.
 The database configuration is consumed by Sequelize in
 `src/database/index.js` and by the Sequelize CLI in `src/config/database.js`.
+The `ADMIN_*` values are required to seed the admin account; they are not
+needed just to start the API.
 
 ### 3. Install frontend dependencies
 
@@ -176,38 +187,49 @@ Restart the Next.js development server after changing `.env.local`.
 
 ## Database setup
 
-Create the database named in `DB_NAME` before running migrations. For example,
-with PostgreSQL tools installed:
+The backend does not automatically create the database or tables at startup.
+It authenticates the database connection before listening. From the backend
+directory, create the configured database and apply its migrations:
 
 ```powershell
-createdb -h localhost -p 5432 -U postgres loan_management
+npm run db:create
+npm run db:migrate
 ```
 
-If your database or user has a different name, create it accordingly and update
-the backend `.env`.
+Before seeding, set all three admin variables in the backend `.env`:
 
-The project uses Sequelize migrations; the API does not automatically create
-the tables at startup. From the backend directory, run:
+```dotenv
+ADMIN_USERNAME=Admin
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=choose-a-strong-password
+```
+
+Create the admin first, then optionally seed sample loans owned by that admin:
 
 ```powershell
-npx sequelize-cli db:migrate
+npm run db:seed:admin
+npm run db:seed:loans
 ```
 
-To load the sample loan applications:
+Do not use `npx sequelize-cli db:seed:all`: the admin seeder requires
+`ADMIN_USERNAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD`, and the sample-loan
+seeder requires the configured admin to exist. Each seeder inserts records;
+avoid rerunning it unless you intend to add duplicate seed data.
+
+For a fresh database, apply all migrations before seeding as shown above. When
+upgrading a database that already contains loans without an owner, apply
+migrations through the ownership-column migration, seed the admin, and then
+apply the remaining migration. This allows existing unassigned loans to be
+associated with that admin before `user_id` becomes required:
 
 ```powershell
-npx sequelize-cli db:seed:all
+npx sequelize-cli db:migrate --to 20261006001000-add-user-id-to-loans.js
+npm run db:seed:admin
+npm run db:migrate
 ```
 
-The migration creates the `loans` table. The seeder adds two example
-applications. Seed data may be inserted each time you run the seeder; avoid
-re-running it if you do not want duplicate sample records.
-
-The authentication migrations create `users` and add `user_id` to `loans`.
-The loan ownership column is nullable to preserve existing loan rows during
-upgrade. Existing rows with no owner remain in the database but are not
-returned to authenticated users. Newly created loans are always assigned to
-the signed-in user.
+The admin seeder intentionally fails if an account with `ADMIN_EMAIL` already
+exists. Verify that account's role rather than seeding it again.
 
 To undo the most recent migration:
 
@@ -249,6 +271,9 @@ the backend defaults to port `5000`. If Next.js reports that port `3000` is
 already occupied and starts on another port, change `FRONTEND_URL` in the
 backend `.env` to match that new browser origin, then restart the backend.
 
+Helmet adds security-related response headers. Signup and login are each
+limited to 10 requests per IP per 15-minute window.
+
 ## How the application works
 
 ### Initial dashboard load
@@ -264,8 +289,8 @@ backend `.env` to match that new browser origin, then restart the backend.
    `src/services/api.js`. The client attaches the bearer token, and the
    configured API URL resolves this to `GET http://localhost:5000/api/loans`.
 6. Express authenticates the token, attaches its user ID to the request, and
-   the controller passes that ID to the loan service. Sequelize returns only
-   rows owned by that user.
+   the controller passes the user to the loan service. Sequelize returns that
+   user's loans, or all loans when the authenticated user is an admin.
 7. The response's `data` array becomes that user's TanStack Query cache. The
    table and summary cards render from that shared data.
 
@@ -323,11 +348,12 @@ authenticated owner.
 
 | Method | Path | Purpose | Success |
 | --- | --- | --- | --- |
-| `GET` | `/api/loans` | List loans, newest first | `200 OK`, `{ success, data }` |
+| `GET` | `/api/loans?page=1&limit=10` | List a page of loans, newest first | `200 OK`, `{ success, data, pagination }` |
 | `POST` | `/api/loans` | Create a loan | `201 Created`, `{ success, message, data }` |
 | `GET` | `/api/loans/:id` | Get one loan by UUID | `200 OK`, `{ success, data }` |
 | `PUT` | `/api/loans/:id` | Update one loan | `200 OK`, `{ success, message, data }` |
 | `DELETE` | `/api/loans/:id` | Delete one loan | `204 No Content` |
+| `PATCH` | `/api/loans/:id/status` | Admin approves or rejects a pending loan | `200 OK`, `{ success, message, data }` |
 
 Create request example:
 
@@ -336,14 +362,14 @@ Create request example:
   "applicant_name": "Jordan Lee",
   "amount": 25000,
   "tenure_months": 36,
-  "purpose": "Home renovation",
-  "status": "PENDING"
+  "purpose": "Home renovation"
 }
 ```
 
 The required create fields are `applicant_name`, `amount`, `tenure_months`, and
-`purpose`. The optional `status` value, and all status updates, must be one of:
-`PENDING`, `APPROVED`, or `REJECTED`.
+`purpose`. Clients cannot include `status`; all newly created loans start as
+`PENDING`. Admins can change a pending loan to `APPROVED` or `REJECTED` through
+the status endpoint.
 
 Typical list response:
 
@@ -361,9 +387,21 @@ Typical list response:
       "created_at": "2026-10-06T08:00:00.000Z",
       "updated_at": "2026-10-06T08:00:00.000Z"
     }
-  ]
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 1,
+    "totalPages": 1
+  }
 }
 ```
+
+Loan lists accept `page` and `limit` query parameters. Defaults are page `1`
+and 10 records; `limit` must be between 1 and 100. For example,
+`GET /api/loans?page=2&limit=25` returns the second page. The `pagination`
+object reports the current page, page size, total matching records, and total
+pages.
 
 The database `DECIMAL` amount may be serialized as a string. The frontend
 converts it to a number for display.
@@ -380,7 +418,8 @@ example:
 
 Validation errors use HTTP 400, missing loans use HTTP 404, and unexpected
 server/database errors use HTTP 500. Missing or another user's loan both
-return HTTP 404.
+return HTTP 404. Attempting to change a loan that is no longer pending returns
+HTTP 409 Conflict.
 
 ## Authentication and user access
 
@@ -405,14 +444,13 @@ API requests, and checks the signed-in profile through `GET /api/auth/me` after
 a page reload. Logging out clears the local token and cached loan data; JWTs
 are not server-side sessions and cannot be individually revoked before expiry.
 For higher-security deployments, consider an HTTP-only secure cookie, token
-rotation/revocation, rate limiting, TLS, and account recovery controls.
+rotation/revocation, TLS, and account recovery controls.
 
 All `/api/loans` endpoints require a valid bearer token. Loan list, read, update,
-and delete operations are scoped to the authenticated user's ID. A user cannot
-read or change another user's loan by guessing its UUID; the API responds as
-though that loan does not exist. An `ADMIN` role value exists in the database
-schema for future use, but the current loan API also scopes administrators to
-their own records.
+and delete operations are scoped to the authenticated user's ID, except admins
+can list every loan and read any loan by UUID. Admin list results include each
+loan submitter's public profile. A user cannot read or change another user's
+loan by guessing its UUID; the API responds as though that loan does not exist.
 
 Authentication endpoints:
 
@@ -443,12 +481,6 @@ authentication it saves the returned token, navigates to the dashboard, and
 shows errors returned by the API directly in the form. Unauthenticated users
 are redirected from the dashboard to `/login`.
 
-The sample seeder creates ownerless legacy loans. They are intentionally
-invisible after authentication because the project cannot safely infer which
-new user should own historical applications. Existing installations should
-assign legacy records to the correct owner through a controlled administrative
-data migration if those records must be retained in user dashboards.
-
 ## Loan data model
 
 The `loans` table has these fields:
@@ -461,7 +493,7 @@ The `loans` table has these fields:
 | `tenure_months` | Positive integer, required | Repayment term in months |
 | `purpose` | String, max 255, required | Reason for the loan |
 | `status` | Enum, required | `PENDING`, `APPROVED`, or `REJECTED` |
-| `user_id` | UUID foreign key, nullable for legacy rows | Owner of the application |
+| `user_id` | Required UUID foreign key | Owner of the application |
 | `created_at` | Timestamp | Creation time |
 | `updated_at` | Timestamp | Last update time |
 
@@ -488,7 +520,7 @@ Rules enforced by the backend (the frontend only mirrors them):
 - A new loan is always `PENDING`. `status` is rejected (`400`) in create/update bodies.
 - Only `PATCH /api/loans/:id/status` (admin only) changes the status, and only to `APPROVED` or `REJECTED`.
 - A decision is final: deciding an already decided loan returns `409`.
-- `APPROVED` / `REJECTED` loans cannot be edited or deleted by the applicant (`403`).
+- `APPROVED` / `REJECTED` loans cannot be edited or deleted by the applicant (`409` conflict).
 
 | Method | Path | Who | Notes |
 | --- | --- | --- | --- |
@@ -509,7 +541,9 @@ ADMIN_EMAIL=admin@example.com
 ADMIN_PASSWORD=choose-a-strong-password
 ```
 
-then run once: `npm run db:seed:admin`.
+then run once: `npm run db:seed:admin`. It requires all three `ADMIN_*`
+variables and creates an `ADMIN` account. To seed example loans owned by that
+admin, run `npm run db:seed:loans` afterward.
 
 ### Allowing several frontend URLs (CORS)
 
@@ -518,6 +552,10 @@ then run once: `npm run db:seed:admin`.
 ```text
 FRONTEND_URL=http://localhost:3000,http://localhost:3002
 ```
+
+Include each frontend's exact origin (scheme and port, no trailing slash).
+The backend allows `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, and preflight
+`OPTIONS` requests from those origins.
 
 ## Troubleshooting
 
@@ -537,7 +575,9 @@ FRONTEND_URL=http://localhost:3000,http://localhost:3002
   `DB_PORT`.
 - Confirm the `DB_NAME` database exists.
 - Check `DB_USER` and `DB_PASSWORD` in the backend `.env`.
-- Apply the database migration with `npx sequelize-cli db:migrate`.
+- Check the backend startup output; it authenticates its database connection
+  before listening.
+- Apply migrations with `npm run db:migrate`.
 
 ### Browser reports a CORS error
 
@@ -571,8 +611,17 @@ npm run build
 npm start
 
 # Backend: run database migrations
-npx sequelize-cli db:migrate
+npm run db:migrate
+
+# Backend: create configured database (PostgreSQL user needs CREATEDB privilege)
+npm run db:create
+
+# Backend: create configured admin (requires ADMIN_* values in .env)
+npm run db:seed:admin
 
 # Backend: seed sample loans
-npx sequelize-cli db:seed:all
+npm run db:seed:loans
+
+# Backend: verify database connection
+npm run db:test
 ```

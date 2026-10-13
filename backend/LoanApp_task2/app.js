@@ -1,16 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 const config = require('./src/config');
+const helmet = require('helmet');
 const routes = require('./src/routes');
 const notFoundMiddleware = require('./src/middleware/not-found.middleware');
 const errorMiddleware = require('./src/middleware/error.middleware');
 
 const app = express();
 
-if (!config.jwtSecret) {
-    throw new Error('JWT_SECRET must be set before starting the API');
-}
-
+app.use(helmet());
 app.use(cors({
     // An array of allowed origins (FRONTEND_URL may be a comma-separated list).
     origin: config.frontendUrls,
@@ -31,8 +29,4 @@ app.use('/api', routes);
 app.use(notFoundMiddleware);
 app.use(errorMiddleware);
 
-app.listen(config.port, () => {
-    console.log(
-        `Server running on http://localhost:${config.port}`
-    );
-});
+module.exports = app;

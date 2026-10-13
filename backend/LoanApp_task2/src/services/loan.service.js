@@ -2,7 +2,6 @@ const { Loan, User } = require('../database/models');
 const { LOAN_STATUS } = require('../enums/loan-status.enum');
 const { USER_ROLE } = require('../enums/user-role.enum');
 const NotFoundError = require('../errors/not-found.error');
-const ForbiddenError = require('../errors/forbidden.error');
 const ConflictError = require('../errors/conflict.error');
 
 // Input validation (required fields, positive numbers, UUIDs...) is done by the
@@ -24,7 +23,7 @@ const loanNotFound = (id) => new NotFoundError(`Loan with ID ${id} was not found
 // Business rule: once a loan is APPROVED or REJECTED the applicant can no longer change it.
 const assertStillPending = (loan, action) => {
     if (loan.status !== LOAN_STATUS.PENDING) {
-        throw new ForbiddenError(
+        throw new ConflictError(
             `A ${loan.status.toLowerCase()} loan application can no longer be ${action}`
         );
     }
@@ -32,15 +31,22 @@ const assertStillPending = (loan, action) => {
 
 class LoanService {
     // Admin: every loan.  Normal user: only their own.
-    async getAllLoans(user) {
-        if (isAdmin(user)) {
-            return Loan.findAll({ include: [submittedBy], order: newestFirst });
-        }
+    async getAllLoans(user, { page, limit }) {
+        const options = {
+            where: isAdmin(user) ? undefined : { user_id: user.id },
+            include: isAdmin(user) ? [submittedBy] : undefined,
+            order: newestFirst,
+            limit,
+            offset: (page - 1) * limit
+        };
+        const { rows, count } = await Loan.findAndCountAll(options);
 
-        return Loan.findAll({
-            where: { user_id: user.id },
-            order: newestFirst
-        });
+        return {
+            rows,
+            count,
+            page,
+            limit
+        };
     }
 
     async createLoan({ applicant_name, amount, tenure_months, purpose }, userId) {

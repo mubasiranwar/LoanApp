@@ -63,6 +63,9 @@ const loanBody = (extra = {}) => ({
         console.log('API is not reachable. Start it first with: npm run dev');
         process.exit(1);
     }
+    await test('security headers are enabled', () => {
+        assert.equal(health.headers.get('x-content-type-options'), 'nosniff');
+    });
 
     // ---- set up three accounts -------------------------------------------------
     const signup = async (name) => {
@@ -119,6 +122,8 @@ const loanBody = (extra = {}) => ({
         const r = await call('GET', '/loans', { token: bob.token });
         assert.equal(r.status, 200);
         assert.equal(r.json.data.length, 0);
+        assert.equal(r.json.pagination.page, 1);
+        assert.equal(r.json.pagination.limit, 10);
     });
     await test("user cannot read another user's loan (404)", async () => {
         const r = await call('GET', `/loans/${aliceLoan.id}`, { token: bob.token });
@@ -131,9 +136,26 @@ const loanBody = (extra = {}) => ({
         assert.ok(found, 'admin should see alice\'s loan');
         assert.equal(found.user.email, alice.user.email);
     });
+    await test('loan list supports pagination and reports page totals', async () => {
+        const r = await call('GET', '/loans?page=1&limit=1', { token: admin.token });
+        assert.equal(r.status, 200, r.text);
+        assert.equal(r.json.data.length, 1);
+        assert.equal(r.json.pagination.page, 1);
+        assert.equal(r.json.pagination.limit, 1);
+        assert.ok(Number.isInteger(r.json.pagination.total));
+        assert.ok(Number.isInteger(r.json.pagination.totalPages));
+        assert.ok(r.json.pagination.total >= 1);
+        assert.ok(r.json.pagination.totalPages >= 1);
+    });
+    await test('invalid loan pagination parameters return 400', async () => {
+        for (const query of ['page=0', 'limit=101']) {
+            const r = await call('GET', `/loans?${query}`, { token: admin.token });
+            assert.equal(r.status, 400, r.text);
+        }
+    });
 
     console.log('\nInvalid input returns 4xx, never 500 (item 9)');
-    await test('invalid UUID on GET/PUT/DELETE/PATCH -> 400', async () => {
+    await test('invalid UUID on GET/PUT/DELETE/PATCH -> 400 with a custom message', async () => {
         for (const [method, path, body, token] of [
             ['GET', '/loans/abc', undefined, alice.token],
             ['PUT', '/loans/abc', { amount: 10 }, alice.token],
@@ -142,6 +164,7 @@ const loanBody = (extra = {}) => ({
         ]) {
             const r = await call(method, path, { token, body });
             assert.equal(r.status, 400, `${method} ${path} -> ${r.status} ${r.text}`);
+            assert.equal(r.json.message, 'Loan ID must be a valid UUID');
         }
     });
     await test('valid-looking UUID that does not exist -> 404', async () => {
@@ -188,21 +211,21 @@ const loanBody = (extra = {}) => ({
         const r = await call('PATCH', `/loans/${aliceLoan.id}/status`, { token: admin.token, body: { status: 'REJECTED' } });
         assert.equal(r.status, 409, r.text);
     });
-    await test('user cannot edit an APPROVED loan (403)', async () => {
+    await test('user cannot edit an APPROVED loan (409)', async () => {
         const r = await call('PUT', `/loans/${aliceLoan.id}`, { token: alice.token, body: { amount: 1 } });
-        assert.equal(r.status, 403, r.text);
+        assert.equal(r.status, 409, r.text);
     });
-    await test('user cannot delete an APPROVED loan (403)', async () => {
+    await test('user cannot delete an APPROVED loan (409)', async () => {
         const r = await call('DELETE', `/loans/${aliceLoan.id}`, { token: alice.token });
-        assert.equal(r.status, 403, r.text);
+        assert.equal(r.status, 409, r.text);
     });
     await test('REJECTED loans are locked too', async () => {
         const created = await call('POST', '/loans', { token: alice.token, body: loanBody() });
         const id = created.json.data.id;
         const rej = await call('PATCH', `/loans/${id}/status`, { token: admin.token, body: { status: 'REJECTED' } });
         assert.equal(rej.status, 200, rej.text);
-        assert.equal((await call('PUT', `/loans/${id}`, { token: alice.token, body: { amount: 2 } })).status, 403);
-        assert.equal((await call('DELETE', `/loans/${id}`, { token: alice.token })).status, 403);
+        assert.equal((await call('PUT', `/loans/${id}`, { token: alice.token, body: { amount: 2 } })).status, 409);
+        assert.equal((await call('DELETE', `/loans/${id}`, { token: alice.token })).status, 409);
     });
     await test('user can delete a PENDING loan (204)', async () => {
         const created = await call('POST', '/loans', { token: alice.token, body: loanBody() });
