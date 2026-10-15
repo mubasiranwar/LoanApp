@@ -10,6 +10,9 @@ const connection = {
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
     dialect: process.env.DB_DIALECT || 'postgres',
+    dialectOptions: process.env.NODE_ENV === 'production'
+        ? { ssl: { require: true, rejectUnauthorized: false } }
+        : {},
     logging: false
 };
 
