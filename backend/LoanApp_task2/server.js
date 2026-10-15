@@ -4,8 +4,8 @@ const sequelize = require('./src/database');
 
 async function startServer() {
     await sequelize.authenticate();
-    return app.listen(config.port, () => {
-        console.log(`Server running on http://localhost:${config.port}`);
+    return app.listen(config.port, '0.0.0.0', () => {
+        console.log(`Server running on port ${config.port}`);
     });
 }
 
