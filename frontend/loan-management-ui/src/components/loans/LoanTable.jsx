@@ -99,6 +99,10 @@ function RowActions({ loan, isAdmin, onEdit, onDelete, onDecide }) {
 
 export default function LoanTable({
   loans = [],
+  pagination,
+  page,
+  isFetching,
+  onPageChange,
   isLoading,
   isError,
   isAdmin = false,
@@ -121,9 +125,9 @@ export default function LoanTable({
               : "Review and manage submitted loan requests"}
           </p>
         </div>
-        {!isLoading && (
+        {!isLoading && !isError && pagination && (
           <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-            {loans.length} {loans.length === 1 ? "application" : "applications"}
+            {pagination.total} {pagination.total === 1 ? "application" : "applications"}
           </span>
         )}
       </div>
@@ -200,6 +204,41 @@ export default function LoanTable({
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+      {!isLoading && !isError && pagination && (
+        <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-slate-500" aria-live="polite">
+            {pagination.total === 0
+              ? "Showing 0 applications"
+              : `Showing ${(page - 1) * pagination.limit + 1}–${Math.min(
+                  page * pagination.limit,
+                  pagination.total,
+                )} of ${pagination.total} applications`}
+          </p>
+          {pagination.totalPages > 1 && (
+            <nav aria-label="Loan applications pagination" className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onPageChange(page - 1)}
+                disabled={page <= 1 || isFetching}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <span className="px-2 text-sm text-slate-600" aria-current="page">
+                Page {page} of {pagination.totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => onPageChange(page + 1)}
+                disabled={page >= pagination.totalPages || isFetching}
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
+            </nav>
+          )}
         </div>
       )}
     </section>

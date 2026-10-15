@@ -11,7 +11,7 @@ import { getErrorMessage } from "@/utils/getErrorMessage";
 
 // Everything the dashboard does besides drawing: which modal is open, which
 // loan it is about, calling the API, and the error to show if that fails.
-export function useLoanActions() {
+export function useLoanActions({ onCollectionChange } = {}) {
   const createLoan = useCreateLoan();
   const updateLoan = useUpdateLoan();
   const deleteLoan = useDeleteLoan();
@@ -52,6 +52,7 @@ export function useLoanActions() {
         await updateLoan.mutateAsync({ id: editingLoan.id, ...payload });
       } else {
         await createLoan.mutateAsync(payload);
+        onCollectionChange?.();
       }
       setFormOpen(false);
       setEditingLoan(null);
@@ -77,6 +78,7 @@ export function useLoanActions() {
     setOperationError(null);
     try {
       await deleteLoan.mutateAsync(deletingLoan.id);
+      onCollectionChange?.();
       setDeletingLoan(null);
     } catch (error) {
       setOperationError(getErrorMessage(error));

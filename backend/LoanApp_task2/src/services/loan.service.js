@@ -32,20 +32,36 @@ const assertStillPending = (loan, action) => {
 class LoanService {
     // Admin: every loan.  Normal user: only their own.
     async getAllLoans(user, { page, limit }) {
+        const where = isAdmin(user) ? undefined : { user_id: user.id };
         const options = {
-            where: isAdmin(user) ? undefined : { user_id: user.id },
+            where,
             include: isAdmin(user) ? [submittedBy] : undefined,
             order: newestFirst,
             limit,
             offset: (page - 1) * limit
         };
-        const { rows, count } = await Loan.findAndCountAll(options);
+        const [{ rows, count }, statusCounts] = await Promise.all([
+            Loan.findAndCountAll(options),
+            Loan.count({ where, group: ['status'] })
+        ]);
+
+        const summary = {
+            total: count,
+            pending: 0,
+            approved: 0,
+            rejected: 0
+        };
+
+        for (const { status, count: statusCount } of statusCounts) {
+            summary[status.toLowerCase()] = Number(statusCount);
+        }
 
         return {
             rows,
             count,
             page,
-            limit
+            limit,
+            summary
         };
     }
 

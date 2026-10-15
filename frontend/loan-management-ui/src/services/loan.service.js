@@ -2,16 +2,31 @@ import api from "./api";
 
 // The ONLY place the loans endpoint is written down.
 const LOANS_URL = "/loans";
+const DEFAULT_PAGE_SIZE = 10;
 
 export const loanService = {
-  async getAll() {
-    const response = await api.get(LOANS_URL);
-    const loans = response.data?.data;
+  async getAll({ page = 1, limit = DEFAULT_PAGE_SIZE } = {}) {
+    const response = await api.get(LOANS_URL, { params: { page, limit } });
+    const { data: loans, pagination, summary } = response.data ?? {};
 
     if (!Array.isArray(loans)) {
       throw new Error("The server returned an invalid loans response.");
     }
-    return loans;
+    if (
+      !pagination ||
+      !Number.isInteger(pagination.page) ||
+      !Number.isInteger(pagination.limit) ||
+      !Number.isInteger(pagination.total) ||
+      !Number.isInteger(pagination.totalPages) ||
+      !summary ||
+      !Number.isInteger(summary.total) ||
+      !Number.isInteger(summary.pending) ||
+      !Number.isInteger(summary.approved) ||
+      !Number.isInteger(summary.rejected)
+    ) {
+      throw new Error("The server returned invalid loan pagination or summary data.");
+    }
+    return { loans, pagination, summary };
   },
 
   async create(payload) {

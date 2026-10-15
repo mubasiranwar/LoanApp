@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Plus } from "lucide-react";
 import DecisionModal from "./DecisionModal";
 import DeleteModal from "./DeleteModal";
@@ -13,9 +14,19 @@ import { useLoans } from "@/hooks/useLoans";
 import { getErrorMessage } from "@/utils/getErrorMessage";
 
 export default function LoanDashboard() {
+  const [page, setPage] = useState(1);
   const { isAdmin } = useAuth();
-  const { data: loans = [], isLoading, isError, error, refetch } = useLoans();
-  const actions = useLoanActions();
+  const {
+    data,
+    isLoading,
+    isFetching,
+    isError,
+    error,
+    refetch,
+  } = useLoans(page);
+  const loans = data?.loans ?? [];
+  const pagination = data?.pagination;
+  const actions = useLoanActions({ onCollectionChange: () => setPage(1) });
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -67,9 +78,13 @@ export default function LoanDashboard() {
         )}
 
         <div className="space-y-6">
-          <SummaryCards loans={loans} isLoading={isLoading} isError={isError} />
+          <SummaryCards summary={data?.summary} isLoading={isLoading} isError={isError} />
           <LoanTable
             loans={loans}
+            pagination={pagination}
+            page={page}
+            isFetching={isFetching}
+            onPageChange={setPage}
             isLoading={isLoading}
             isError={isError}
             isAdmin={isAdmin}

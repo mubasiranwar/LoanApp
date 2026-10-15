@@ -13,7 +13,8 @@ const getAllLoans = asyncHandler(async (req, res) => {
             limit: result.limit,
             total: result.count,
             totalPages: Math.ceil(result.count / result.limit)
-        }
+        },
+        summary: result.summary
     });
 });
 

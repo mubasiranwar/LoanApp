@@ -25,43 +25,19 @@ export default function LoanModal({ loan, onClose, onSubmit, isSaving, error }) 
         }
       : emptyForm,
   );
-  const [validationError, setValidationError] = useState("");
   const isEditing = Boolean(loan);
 
   function updateField(event) {
     setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
-    setValidationError("");
   }
 
   function handleSubmit(event) {
     event.preventDefault();
-    const name = form.applicant_name.trim();
-    const purpose = form.purpose.trim();
-    const amount = Number(form.amount);
-    const tenure = Number(form.tenure_months);
-
-    if (!name || !purpose) {
-      setValidationError("Applicant name and purpose are required.");
-      return;
-    }
-    if (name.length > 100 || purpose.length > 255) {
-      setValidationError("Applicant name must be at most 100 characters and purpose at most 255.");
-      return;
-    }
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setValidationError("Enter a loan amount greater than zero.");
-      return;
-    }
-    if (!Number.isInteger(tenure) || tenure <= 0) {
-      setValidationError("Enter a whole-number tenure greater than zero.");
-      return;
-    }
-
     onSubmit({
-      applicant_name: name,
-      amount,
-      tenure_months: tenure,
-      purpose,
+      applicant_name: form.applicant_name.trim(),
+      amount: Number(form.amount),
+      tenure_months: Number(form.tenure_months),
+      purpose: form.purpose.trim(),
     });
   }
 
@@ -87,8 +63,10 @@ export default function LoanModal({ loan, onClose, onSubmit, isSaving, error }) 
           value={form.applicant_name}
           onChange={updateField}
           maxLength={100}
+          pattern={String.raw`[\s\S]*\S[\s\S]*`}
+          title="Enter at least one non-whitespace character."
           required
-          placeholder="e.g. Jordan Lee"
+          placeholder="e.g. Mubasir Anwar"
         />
         <div className="grid gap-4 sm:grid-cols-2">
           <Input
@@ -122,14 +100,16 @@ export default function LoanModal({ loan, onClose, onSubmit, isSaving, error }) 
           value={form.purpose}
           onChange={updateField}
           maxLength={255}
+          pattern={String.raw`[\s\S]*\S[\s\S]*`}
+          title="Enter at least one non-whitespace character."
           rows={3}
           required
           className="resize-y"
           placeholder="Briefly describe the loan purpose"
         />
-        {(validationError || error) && (
+        {error && (
           <p role="alert" className="rounded-lg bg-rose-50 px-3.5 py-2.5 text-sm text-rose-700">
-            {validationError || error}
+            {error}
           </p>
         )}
         <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">

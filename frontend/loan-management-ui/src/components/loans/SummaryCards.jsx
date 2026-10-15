@@ -33,12 +33,10 @@ const cards = [
   },
 ];
 
-export default function SummaryCards({ loans = [], isLoading = false, isError = false }) {
+export default function SummaryCards({ summary, isLoading = false, isError = false }) {
   return (
     <section aria-label="Application summary" className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
-      {cards.map(({ key, status, label, icon: Icon, iconClass }) => {
-        const count = status ? loans.filter((loan) => loan.status === status).length : loans.length;
-
+      {cards.map(({ key, label, icon: Icon, iconClass }) => {
         return (
           <article
             key={key}
@@ -58,7 +56,7 @@ export default function SummaryCards({ loans = [], isLoading = false, isError = 
                 isLoading ? `Loading ${label.toLowerCase()}` : isError ? `${label} unavailable` : undefined
               }
             >
-              {isLoading || isError ? "—" : count}
+              {isLoading || isError ? "—" : summary?.[key] ?? "—"}
             </p>
           </article>
         );

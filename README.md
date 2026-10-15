@@ -291,8 +291,9 @@ limited to 10 requests per IP per 15-minute window.
 6. Express authenticates the token, attaches its user ID to the request, and
    the controller passes the user to the loan service. Sequelize returns that
    user's loans, or all loans when the authenticated user is an admin.
-7. The response's `data` array becomes that user's TanStack Query cache. The
-   table and summary cards render from that shared data.
+7. The response's paginated `data` array becomes that user's TanStack Query
+   cache. The table renders the current page, while summary cards use the
+   response's full result totals.
 
 During the request, the table displays loading skeletons. If the request fails,
 the dashboard shows an error and a retry action instead of presenting a failed
@@ -348,7 +349,7 @@ authenticated owner.
 
 | Method | Path | Purpose | Success |
 | --- | --- | --- | --- |
-| `GET` | `/api/loans?page=1&limit=10` | List a page of loans, newest first | `200 OK`, `{ success, data, pagination }` |
+| `GET` | `/api/loans?page=1&limit=10` | List a page of loans, newest first | `200 OK`, `{ success, data, pagination, summary }` |
 | `POST` | `/api/loans` | Create a loan | `201 Created`, `{ success, message, data }` |
 | `GET` | `/api/loans/:id` | Get one loan by UUID | `200 OK`, `{ success, data }` |
 | `PUT` | `/api/loans/:id` | Update one loan | `200 OK`, `{ success, message, data }` |
@@ -393,6 +394,12 @@ Typical list response:
     "limit": 10,
     "total": 1,
     "totalPages": 1
+  },
+  "summary": {
+    "total": 1,
+    "pending": 1,
+    "approved": 0,
+    "rejected": 0
   }
 }
 ```
@@ -401,7 +408,8 @@ Loan lists accept `page` and `limit` query parameters. Defaults are page `1`
 and 10 records; `limit` must be between 1 and 100. For example,
 `GET /api/loans?page=2&limit=25` returns the second page. The `pagination`
 object reports the current page, page size, total matching records, and total
-pages.
+pages. The `summary` counts cover every loan visible to the authenticated
+user (or every loan for an admin), not only the current page.
 
 The database `DECIMAL` amount may be serialized as a string. The frontend
 converts it to a number for display.

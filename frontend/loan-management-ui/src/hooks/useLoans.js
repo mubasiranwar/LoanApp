@@ -5,13 +5,14 @@ import { useAuth } from "@/context/AuthContext";
 import { loanService } from "@/services/loan.service";
 
 const LOANS_QUERY_KEY = ["loans"];
+const PAGE_SIZE = 10;
 
-export function useLoans() {
+export function useLoans(page) {
   const { user, isAuthenticated, isLoading } = useAuth();
   return useQuery({
     // Keyed by user so one account never sees another account's cached list.
-    queryKey: [...LOANS_QUERY_KEY, user?.id],
-    queryFn: loanService.getAll,
+    queryKey: [...LOANS_QUERY_KEY, user?.id, page, PAGE_SIZE],
+    queryFn: () => loanService.getAll({ page, limit: PAGE_SIZE }),
     enabled: isAuthenticated && !isLoading,
   });
 }
