@@ -14,7 +14,7 @@ const createLoanSchema = Joi.object({
 const updateLoanSchema = Joi.object({
     applicant_name: Joi.string().trim().max(100),
     amount: Joi.number().positive(),
-    tenure_months: Joi.number().integer().positive(),
+    tenure_months: Joi.number().integer().positive().max(360), // 30 years max
     purpose: Joi.string().trim().max(255)
 }).min(1);
 
